@@ -38,7 +38,6 @@ daily_rest_helpers = DailyRESTHelper(
 
 
 async def maybe_room_and_token() -> tuple[str, str]:
-    room = None
     if os.getenv("DAILY_SAMPLE_ROOM_URL", None):
         room = await daily_rest_helpers.get_room_from_url(
             os.getenv("DAILY_SAMPLE_ROOM_URL", "")

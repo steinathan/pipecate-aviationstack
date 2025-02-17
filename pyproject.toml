@@ -7,7 +7,7 @@ requires-python = ">=3.12"
 dependencies = [
     "fastapi>=0.115.8",
     "loguru>=0.7.3",
-    "pipecat-ai[daily,elevenlabs,google,openai,silero]>=0.0.56",
+    "pipecat-ai[daily,elevenlabs,google,openai,silero,soundfile]>=0.0.56",
     "python-dotenv>=1.0.1",
     "uvicorn>=0.34.0",
 ]

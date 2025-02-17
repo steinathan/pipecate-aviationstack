@@ -47,7 +47,6 @@ const client = new RTVIClient({
   enableMic: true,
 })
 
-// Root component wraps the app with the provider
 export function FlightVoiceAgent() {
   return (
     <RTVIClientProvider client={client}>
@@ -57,7 +56,6 @@ export function FlightVoiceAgent() {
   )
 }
 
-// Component using the client
 function VoiceBot() {
   const voiceClient = useRTVIClient()
   const transportState = useRTVIClientTransportState()

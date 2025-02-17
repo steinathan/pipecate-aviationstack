@@ -23,15 +23,13 @@ from pipecat.services.elevenlabs import ElevenLabsTTSService
 from pipecat.services.openai import OpenAILLMService
 from pipecat.transports.services.daily import DailyParams, DailyTransport
 from openai.types.chat import ChatCompletionToolParam
+from pipecat.audio.mixers.soundfile_mixer import SoundfileMixer, MixerEnableFrame
 
 from tools import make_flight_request
 
 load_dotenv(override=True)
 logger.remove(0)
 logger.add(sys.stderr, level="DEBUG")
-
-sprites = []
-script_dir = os.path.dirname(__file__)
 
 
 async def get_flight_details(
@@ -63,7 +61,27 @@ tools = [
 ]
 
 
+async def load_ambient_sounds(filepath: str) -> dict[str, str]:
+    files_mapping: dict[str, str] = {}
+    for file in os.listdir(filepath):
+        if os.path.isfile(os.path.join(filepath, file)):
+            if file.endswith(".wav"):
+                name = file.split(".")[0].replace(" ", "-")
+                files_mapping[name] = os.path.join(filepath, file)
+    return files_mapping
+
+
 async def run_bot(room_url: str, token: str, loop: asyncio.AbstractEventLoop = None):
+    ambient_sounds = await load_ambient_sounds(
+        os.path.join(os.getcwd(), "ambient_sounds")
+    )
+    logger.info(f"Found Ambient Sounds: {ambient_sounds}")
+    mixer = SoundfileMixer(
+        sound_files=ambient_sounds,
+        default_sound="airport-walk-through-zurich-international",  # list(ambient_sounds.keys())[0],
+        volume=1.0,
+    )
+
     transport = DailyTransport(
         room_url=room_url,
         token=token,
@@ -72,8 +90,10 @@ async def run_bot(room_url: str, token: str, loop: asyncio.AbstractEventLoop = N
             audio_out_enabled=True,
             camera_out_enabled=False,
             vad_enabled=True,
+            audio_out_mixer=mixer,
             vad_analyzer=SileroVADAnalyzer(),
             transcription_enabled=True,
+            vad_audio_passthrough=True,
         ),
     )
 
@@ -98,14 +118,12 @@ You are Jane, a flight status assistant for VoiceCab, a service that helps custo
 Your goal is to assist users by retrieving their flight information, providing real-time updates, and offering personalized support regarding their travel plans.
 
 # Conversation Stages to Follow:
-Introduction: Start by introducing yourself and your company. Keep it polite and professional but, like, make it sound natural—maybe throw in an “umm” or “uhh” when appropriate.
-Inquiry Handling: Ask for their flight details—“Eeemm, could you share your flight number?”—and confirm any key info.
-Flight Status Update: Provide updates in a casual, helpful way—“Okay, so uhh, your flight is on time… yeah, no delays so far.” If there’s a delay, break it gently—“Eeemm, so, looks like your flight’s been pushed back a bit…”
-Additional Assistance: Offer extra details naturally—“Oh, and like, if you need to check baggage rules, I can help with that too.”
-Closing: Wrap up with a friendly, slightly informal tone—“Alrighty, you should be good to go! Let me know if, uhh, you need anything else, okay?”
+Introduction: Start by saying "Thanks for calling VoiceCab, how can I help?"
+Inquiry Handling: Ask for their flight details—“uhh, what flight are you looking for?”—and confirm any key info.
+Flight Status Update: Provide updates in a casual, helpful way—“so uhh, your flight is on time… yeah, no delays so far.” If there’s a delay, break it gently—“Emm, so, looks like your flight’s been pushed back a bit…”
 
 # Additional Notes:
-Keep responses short and natural, adding small pauses or fillers (“uhhh,” “eeemm,” “ummm,” “sooo,” “like”) to make it feel more human.
+Keep responses short and natural, adding small pauses or fillers (“uhhh,” “eeemm,” “ummm,” “sooo,” “like”) to make it feel more human but don't excessively use it
 Start the conversation with a casual greeting—no sales pitch right away.
 Avoid sounding robotic—flow naturally as if you’re actually talking on a call.
 """
@@ -169,14 +187,13 @@ Avoid sounding robotic—flow naturally as if you’re actually talking on a cal
     async def on_first_participant_joined(transport, participant):
         await transport.capture_participant_transcription(participant["id"])
         await task.queue_frames([context_aggregator.user().get_context_frame()])
+        await task.queue_frame(MixerEnableFrame(True))
 
     @transport.event_handler("on_participant_left")
     async def on_participant_left(transport, participant, reason):
         logger.warning(f"Participant left: {participant}")
         await task.cancel()
-
-        if loop:
-            loop.stop()
+        logger.warning("Task cancelled")
 
     runner = PipelineRunner()
     await runner.run(task)
